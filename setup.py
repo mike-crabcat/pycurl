@@ -416,21 +416,38 @@ ignore this message.''')
         return ssl_lib_detected
 
     def configure_windows(self):
-        OPENSSL_DIR = scan_argv(self.argv, "--openssl-dir=")
-        if OPENSSL_DIR is not None:
-            self.include_dirs.append(os.path.join(OPENSSL_DIR, "include"))
-            self.library_dirs.append(os.path.join(OPENSSL_DIR, "lib"))
-        # Windows users have to pass --curl-dir parameter to specify path
-        # to libcurl, because there is no curl-config on windows at all.
-        curl_dir = scan_argv(self.argv, "--curl-dir=")
-        if curl_dir is None:
-            fail("Please specify --curl-dir=/path/to/built/libcurl")
-        if not os.path.exists(curl_dir):
-            fail("Curl directory does not exist: %s" % curl_dir)
-        if not os.path.isdir(curl_dir):
-            fail("Curl directory is not a directory: %s" % curl_dir)
-        print("Using curl directory: %s" % curl_dir)
+        # modified to compile against vcpkg install
+        vcpkg_dir = scan_argv(self.argv, "--vcpkg-dir=")
+        if vcpkg_dir is None:
+            fail("Please specify --vcpkg_dir=/path/to/built/libcurl")
+        
+        # vcpkg package name extension
+        vcpkg_ext = scan_argv(self.argv, "--vcpkg-ext=")
+        if vcpkg_ext is None:
+            fail("Please specify --vcpkg_ext=package name extension")
+
+        if not os.path.exists(vcpkg_dir):
+            fail("Vcpkg directory does not exist: %s" % vcpkg_dir)
+        if not os.path.isdir(vcpkg_dir):
+            fail("Vcpkg directory is not a directory: %s" % vcpkg_dir)
+
+        print("Using vcpkg directory: %s" % vcpkg_dir)
+        curl_dir = os.path.join(vcpkg_dir, "packages/curl_%s" % vcpkg_ext)
+        openssl_dir = os.path.join(vcpkg_dir, "packages/openssl_%s" % vcpkg_ext)
+
+        zlib_dir = os.path.join(vcpkg_dir, "packages/zlib_%s" % vcpkg_ext)
+        nghttp2_dir = os.path.join(vcpkg_dir, "packages/nghttp2_%s" % vcpkg_ext)
+        ssh2_dir = os.path.join(vcpkg_dir, "packages/libssh2_%s" % vcpkg_ext)
+        cares_dir = os.path.join(vcpkg_dir, "packages/c-ares_%s" % vcpkg_ext)
+
         self.include_dirs.append(os.path.join(curl_dir, "include"))
+        self.include_dirs.append(os.path.join(openssl_dir, "include"))
+
+        self.library_dirs.append(os.path.join(openssl_dir, "lib"))
+        self.library_dirs.append(os.path.join(zlib_dir, "lib"))
+        self.library_dirs.append(os.path.join(nghttp2_dir, "lib"))
+        self.library_dirs.append(os.path.join(ssh2_dir, "lib"))
+        self.library_dirs.append(os.path.join(cares_dir, "lib"))
 
         # libcurl windows documentation states that for linking against libcurl
         # dll, the import library name is libcurl_imp.lib.
@@ -542,9 +559,12 @@ ignore this message.''')
     def using_openssl(self):
         self.define_macros.append(('HAVE_CURL_OPENSSL', 1))
         if sys.platform == "win32":
-            # CRYPTO_num_locks is defined in libeay32.lib
-            # for openssl < 1.1.0; it is a noop for openssl >= 1.1.0
-            self.extra_link_args.append(self.openssl_lib_name)
+            # Hard coded for >= openssl 1.1.0, include required windows api libraries (assuming static openssl linkage)
+            self.extra_link_args.append("libssl.lib")
+            self.extra_link_args.append("libcrypto.lib")
+            self.extra_link_args.append("crypt32.lib")      # windows api used by openssl 
+            self.extra_link_args.append("advapi32.lib")     # windows api used by openssl 
+            self.extra_link_args.append("user32.lib")       # windows api used by openssl 
         else:
             # we also need ssl for the certificate functions
             # (SSL_CTX_get_cert_store)
